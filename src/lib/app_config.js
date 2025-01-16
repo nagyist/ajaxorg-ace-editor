@@ -1,7 +1,8 @@
 "no use strict";
-
 var oop = require("./oop");
 var EventEmitter = require("./event_emitter").EventEmitter;
+const reportError = require("./report_error").reportError;
+const defaultEnglishMessages = require("./default_english_messages").defaultEnglishMessages;
 
 var optionsProvider = {
     setOptions: function(optList) {
@@ -28,6 +29,7 @@ var optionsProvider = {
     setOption: function(name, value) {
         if (this["$" + name] === value)
             return;
+        //@ts-ignore
         var opt = this.$options[name];
         if (!opt) {
             return warn('misspelled option "' + name + '"');
@@ -56,25 +58,23 @@ function warn(message) {
         console.warn.apply(console, arguments);
 }
 
-function reportError(msg, data) {
-    var e = new Error(msg);
-    e.data = data;
-    if (typeof console == "object" && console.error)
-        console.error(e);
-    setTimeout(function() { throw e; });
-}
+var messages;
+var nlsPlaceholders;
 
-var AppConfig = function() {
-    this.$defaultOptions = {};
-};
+class AppConfig {
+    constructor() {
+            this.$defaultOptions = {};
+            messages = defaultEnglishMessages;
+            nlsPlaceholders = "dollarSigns";
+        }
 
-(function() {
-    // module loading
-    oop.implement(this, EventEmitter);
-    /*
-     * option {name, value, initialValue, setterName, set, get }
+    /**
+     * @param {Object} obj
+     * @param {string} path
+     * @param {{ [key: string]: any }} options
+     * @returns {import("../../ace-internal").Ace.AppConfig}
      */
-    this.defineOptions = function(obj, path, options) {
+    defineOptions(obj, path, options) {
         if (!obj.$options)
             this.$defaultOptions[path] = obj.$options = {};
 
@@ -93,17 +93,25 @@ var AppConfig = function() {
         oop.implement(obj, optionsProvider);
 
         return this;
-    };
+    }
 
-    this.resetOptions = function(obj) {
+    /**
+     * @param {Object} obj
+     */
+    resetOptions(obj) {
         Object.keys(obj.$options).forEach(function(key) {
             var opt = obj.$options[key];
             if ("value" in opt)
                 obj.setOption(key, opt.value);
         });
-    };
+    }
 
-    this.setDefaultValue = function(path, name, value) {
+    /**
+     * @param {string} path
+     * @param {string} name
+     * @param {any} value
+     */
+    setDefaultValue(path, name, value) {
         if (!path) {
             for (path in this.$defaultOptions)
                 if (this.$defaultOptions[path][name])
@@ -118,17 +126,66 @@ var AppConfig = function() {
             else
                 opts[name].value = value;
         }
-    };
+    }
 
-    this.setDefaultValues = function(path, optionHash) {
+    /**
+     * @param {string} path
+     * @param {{ [key: string]: any; }} optionHash
+     */
+    setDefaultValues(path, optionHash) {
         Object.keys(optionHash).forEach(function(key) {
             this.setDefaultValue(path, key, optionHash[key]);
         }, this);
-    };
-    
-    this.warn = warn;
-    this.reportError = reportError;
-    
-}).call(AppConfig.prototype);
+    }
+
+    /**
+     * @param {any} value
+     * @param {{placeholders?: "dollarSigns" | "curlyBrackets"}} [options]
+     */
+    setMessages(value, options) {
+        messages = value;
+        if (options && options.placeholders) {
+            nlsPlaceholders = options.placeholders;
+        }
+    }
+
+    /**
+     * @param {string} key
+     * @param {string} defaultString
+     * @param {{ [x: string]: any; }} [params]
+     */
+    nls(key, defaultString, params) {
+        if (!messages[key])  {
+            warn("No message found for the key '" + key + "' in messages with id " + messages.$id + ", trying to find a translation for the default string '" + defaultString + "'.");
+            if (!messages[defaultString]) {
+                warn("No message found for the default string '" + defaultString + "' in the provided messages. Falling back to the default English message.");
+            }
+        }
+
+        var translated = messages[key] || messages[defaultString] || defaultString;
+        if (params) {
+            // We support both $n or {n} as placeholder indicators in the provided translated strings
+            if (nlsPlaceholders === "dollarSigns") {
+                // Replace $n with the nth element in params
+                translated = translated.replace(/\$(\$|[\d]+)/g, function(_, dollarMatch) {
+                    if (dollarMatch == "$") return "$";
+                    return params[dollarMatch];
+                });
+            }
+            if (nlsPlaceholders === "curlyBrackets") {
+                // Replace {n} with the nth element in params
+                translated = translated.replace(/\{([^\}]+)\}/g, function(_, curlyBracketMatch) {
+                    return params[curlyBracketMatch];
+                });
+            }
+        }
+        return translated;
+    }
+}
+AppConfig.prototype.warn = warn;
+AppConfig.prototype.reportError = reportError;
+
+// module loading
+oop.implement(AppConfig.prototype, EventEmitter);
 
 exports.AppConfig = AppConfig;

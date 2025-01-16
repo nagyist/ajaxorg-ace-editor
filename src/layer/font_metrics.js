@@ -5,43 +5,42 @@ var event = require("../lib/event");
 var useragent = require("../lib/useragent");
 var EventEmitter = require("../lib/event_emitter").EventEmitter;
 
-var DEFAULT_CHAR_COUNT = 250;
+var CHAR_COUNT = 512;
 var USE_OBSERVER = typeof ResizeObserver == "function";
 var L = 200;
 
-var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
-    this.charCount = charCount || DEFAULT_CHAR_COUNT;
+class FontMetrics {
 
-    this.el = dom.createElement("div");
-    this.$setMeasureNodeStyles(this.el.style, true);
+    /**
+     * @param {HTMLElement} parentEl
+     */
+    constructor(parentEl) {
+        this.el = dom.createElement("div");
+        this.$setMeasureNodeStyles(this.el.style, true);
 
-    this.$main = dom.createElement("div");
-    this.$setMeasureNodeStyles(this.$main.style);
+        this.$main = dom.createElement("div");
+        this.$setMeasureNodeStyles(this.$main.style);
 
-    this.$measureNode = dom.createElement("div");
-    this.$setMeasureNodeStyles(this.$measureNode.style);
+        this.$measureNode = dom.createElement("div");
+        this.$setMeasureNodeStyles(this.$measureNode.style);
 
-    this.el.appendChild(this.$main);
-    this.el.appendChild(this.$measureNode);
-    parentEl.appendChild(this.el);
 
-    this.$measureNode.textContent = lang.stringRepeat("X", this.charCount);
+        this.el.appendChild(this.$main);
+        this.el.appendChild(this.$measureNode);
+        parentEl.appendChild(this.el);
 
-    this.$characterSize = {width: 0, height: 0};
+        this.$measureNode.textContent = lang.stringRepeat("X", CHAR_COUNT);
 
-    if (USE_OBSERVER)
-        this.$addObserver();
-    else
-        this.checkForSizeChanges();
-};
+        this.$characterSize = {width: 0, height: 0};
 
-(function() {
 
-    oop.implement(this, EventEmitter);
-
-    this.$characterSize = {width: 0, height: 0};
-
-    this.$setMeasureNodeStyles = function(style, isRoot) {
+        if (USE_OBSERVER)
+            this.$addObserver();
+        else
+            this.checkForSizeChanges();
+    }
+    
+    $setMeasureNodeStyles(style, isRoot) {
         style.width = style.height = "auto";
         style.left = style.top = "0px";
         style.visibility = "hidden";
@@ -54,9 +53,12 @@ var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
             style.font = "inherit";
         }
         style.overflow = isRoot ? "hidden" : "visible";
-    };
+    }
 
-    this.checkForSizeChanges = function(size) {
+    /**
+     * @param size
+     */
+    checkForSizeChanges(size) {
         if (size === undefined)
             size = this.$measureSizes();
         if (size && (this.$characterSize.width !== size.width || this.$characterSize.height !== size.height)) {
@@ -68,100 +70,99 @@ var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
             this.allowBoldFonts = boldSize && boldSize.width === size.width && boldSize.height === size.height;
             this._emit("changeCharacterSize", {data: size});
         }
-    };
+    }
 
-    this.$addObserver = function() {
+    $addObserver() {
         var self = this;
         this.$observer = new window.ResizeObserver(function(e) {
             // e[0].contentRect is broken on safari when zoomed;
             self.checkForSizeChanges();
         });
         this.$observer.observe(this.$measureNode);
-    };
+    }
 
-    this.$pollSizeChanges = function() {
+    /**
+     * @return {number}
+     */
+    $pollSizeChanges() {
         if (this.$pollSizeChangesTimer || this.$observer)
             return this.$pollSizeChangesTimer;
         var self = this;
-
+        
         return this.$pollSizeChangesTimer = event.onIdle(function cb() {
             self.checkForSizeChanges();
             event.onIdle(cb, 500);
         }, 500);
-    };
+    }
 
-    this.setPolling = function(val) {
+    /**
+     * @param {boolean} val
+     */
+    setPolling(val) {
         if (val) {
             this.$pollSizeChanges();
         } else if (this.$pollSizeChangesTimer) {
             clearInterval(this.$pollSizeChangesTimer);
             this.$pollSizeChangesTimer = 0;
         }
-    };
+    }
 
-    this.$measureSizes = function(node) {
-        node = node || this.$measureNode;
-
-        // Avoid `Element.clientWidth` since it is rounded to an integer (see
-        // https://developer.mozilla.org/en-US/docs/Web/API/Element/clientWidth).
-        // Using it here can result in a noticeable cursor offset for long lines.
-        const rect = node.getBoundingClientRect();
-        const charSize = {
-            height: rect.height,
-            width: rect.width / this.charCount
+    $measureSizes(node) {
+        var size = {
+            height: (node || this.$measureNode).clientHeight,
+            width: (node || this.$measureNode).clientWidth / CHAR_COUNT
         };
-
+        
         // Size and width can be null if the editor is not visible or
         // detached from the document
-        if (charSize.width === 0 || charSize.height === 0)
+        if (size.width === 0 || size.height === 0)
             return null;
-        return charSize;
-    };
+        return size;
+    }
 
-    this.$measureCharWidth = function(ch) {
-        this.$main.textContent = lang.stringRepeat(ch, this.charCount);
-        // Avoid `Element.clientWidth` since it is rounded to an integer (see
-        // https://developer.mozilla.org/en-US/docs/Web/API/Element/clientWidth).
+    $measureCharWidth(ch) {
+        this.$main.textContent = lang.stringRepeat(ch, CHAR_COUNT);
         var rect = this.$main.getBoundingClientRect();
-        return rect.width / this.charCount;
-    };
-
-    this.getCharacterWidth = function(ch) {
+        return rect.width / CHAR_COUNT;
+    }
+    
+    getCharacterWidth(ch) {
         var w = this.charSizes[ch];
         if (w === undefined) {
             w = this.charSizes[ch] = this.$measureCharWidth(ch) / this.$characterSize.width;
         }
         return w;
-    };
+    }
 
-    this.destroy = function() {
+    destroy() {
         clearInterval(this.$pollSizeChangesTimer);
         if (this.$observer)
             this.$observer.disconnect();
         if (this.el && this.el.parentNode)
             this.el.parentNode.removeChild(this.el);
-    };
+    }
 
-
-    this.$getZoom = function getZoom(element) {
+    
+    $getZoom(element) {
         if (!element || !element.parentElement) return 1;
-        return (window.getComputedStyle(element).zoom || 1) * getZoom(element.parentElement);
-    };
-    this.$initTransformMeasureNodes = function() {
+        return (Number(window.getComputedStyle(element)["zoom"]) || 1) * this.$getZoom(element.parentElement);
+    }
+    
+    $initTransformMeasureNodes() {
         var t = function(t, l) {
             return ["div", {
                 style: "position: absolute;top:" + t + "px;left:" + l + "px;"
             }];
         };
         this.els = dom.buildDom([t(0, 0), t(L, 0), t(0, L), t(L, L)], this.el);
-    };
+    }
     // general transforms from element coordinates x to screen coordinates u have the form
     // | m1[0] m2[0] t[0] |   | x |       | u |
     // | m1[1] m2[1] t[1] | . | y |  == k | v |
     // | h[0]  h[1]  1    |   | 1 |       | 1 |
     // this function finds the coeeficients of the matrix using positions of four points
     //  
-    this.transformCoordinates = function(clientPos, elPos) {
+    transformCoordinates(clientPos, elPos) {
         if (clientPos) {
             var zoom = this.$getZoom(this.el);
             clientPos = mul(1 / zoom, clientPos);
@@ -179,7 +180,7 @@ var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
 
         if (!this.els)
             this.$initTransformMeasureNodes();
-
+        
         function p(el) {
             var r = el.getBoundingClientRect();
             return [r.left, r.top];
@@ -194,7 +195,7 @@ var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
 
         var m1 = mul(1 + h[0], sub(b, a));
         var m2 = mul(1 + h[1], sub(c, a));
-
+        
         if (elPos) {
             var x = elPos;
             var k = h[0] * x[0] / L + h[1] * x[1] / L + 1;
@@ -204,6 +205,11 @@ var FontMetrics = exports.FontMetrics = function(parentEl, charCount) {
         var u = sub(clientPos, a);
         var f = solve(sub(m1, mul(h[0], u)), sub(m2, mul(h[1], u)), u);
         return mul(L, f);
-    };
+    }
+    
+}
+FontMetrics.prototype.$characterSize = {width: 0, height: 0};
 
-}).call(FontMetrics.prototype);
+oop.implement(FontMetrics.prototype, EventEmitter);
+
+exports.FontMetrics = FontMetrics;

@@ -1,49 +1,68 @@
 "use strict";
-
+/**
+ *
+ * @typedef {import("../editor").Editor} Editor
+ */
 var oop = require("../lib/oop");
 var MultiHashHandler = require("../keyboard/hash_handler").MultiHashHandler;
 var EventEmitter = require("../lib/event_emitter").EventEmitter;
 
-/**
- * @class CommandManager
- *
- **/
+class CommandManager extends MultiHashHandler{
+    /**
+     * new CommandManager(platform, commands)
+     * @param {String} platform Identifier for the platform; must be either `"mac"` or `"win"`
+     * @param {any[]} commands A list of commands
+     **/
+    constructor(platform, commands) {
+        super(commands, platform);
+        this.byName = this.commands;
+        this.setDefaultHandler("exec", function(e) {
+            if (!e.args) {
+                return e.command.exec(e.editor, {}, e.event, true);
+            }
+            return e.command.exec(e.editor, e.args, e.event, false);
+        });
+    }
 
-/**
- * new CommandManager(platform, commands)
- * @param {String} platform Identifier for the platform; must be either `"mac"` or `"win"`
- * @param {Array} commands A list of commands
- *
- **/
-
-var CommandManager = function(platform, commands) {
-    MultiHashHandler.call(this, commands, platform);
-    this.byName = this.commands;
-    this.setDefaultHandler("exec", function(e) {
-        if (!e.args) {
-            return e.command.exec(e.editor, {}, e.event, true);
-        }
-        return e.command.exec(e.editor, e.args, e.event, false);
-    });
-};
-
-oop.inherits(CommandManager, MultiHashHandler);
-
-(function() {
-
-    oop.implement(this, EventEmitter);
-
-    this.exec = function(command, editor, args) {
+    /**
+     * 
+     * @param {string | string[] | import("../../ace-internal").Ace.Command} command
+     * @param {Editor} editor
+     * @param {any} args
+     * @returns {boolean}
+     */
+    exec(command, editor, args) {
         if (Array.isArray(command)) {
             for (var i = command.length; i--; ) {
                 if (this.exec(command[i], editor, args)) return true;
             }
             return false;
         }
-
+        
         if (typeof command === "string")
             command = this.commands[command];
 
+        if (!this.canExecute(command, editor)) {
+            return false; 
+        }
+        
+        var e = {editor: editor, command: command, args: args};
+        e.returnValue = this._emit("exec", e);
+        this._signal("afterExec", e);
+
+        return e.returnValue === false ? false : true;
+    }
+
+    /**
+     *
+     * @param {string | import("../../ace-internal").Ace.Command} command
+     * @param {Editor} editor
+     * @returns {boolean}
+     */
+    canExecute(command, editor) {
+        if (typeof command === "string")
+            command = this.commands[command];
+        
         if (!command)
             return false;
 
@@ -52,15 +71,16 @@ oop.inherits(CommandManager, MultiHashHandler);
 
         if (this.$checkCommandState != false && command.isAvailable && !command.isAvailable(editor))
             return false;
+        
+        return true;
+    }
+    
 
-        var e = {editor: editor, command: command, args: args};
-        e.returnValue = this._emit("exec", e);
-        this._signal("afterExec", e);
-
-        return e.returnValue === false ? false : true;
-    };
-
-    this.toggleRecording = function(editor) {
+    /**
+     * @param {Editor} editor
+     * @returns {boolean}
+     */
+    toggleRecording(editor) {
         if (this.$inReplay)
             return;
 
@@ -84,9 +104,12 @@ oop.inherits(CommandManager, MultiHashHandler);
         this.macro = [];
         this.on("exec", this.$addCommandToMacro);
         return this.recording = true;
-    };
+    }
 
-    this.replay = function(editor) {
+    /**
+     * @param {Editor} editor
+     */
+    replay(editor) {
         if (this.$inReplay || !this.macro)
             return;
 
@@ -104,9 +127,9 @@ oop.inherits(CommandManager, MultiHashHandler);
         } finally {
             this.$inReplay = false;
         }
-    };
+    }
 
-    this.trimMacro = function(m) {
+    trimMacro(m) {
         return m.map(function(x){
             if (typeof x[0] != "string")
                 x[0] = x[0].name;
@@ -114,8 +137,9 @@ oop.inherits(CommandManager, MultiHashHandler);
                 x = x[0];
             return x;
         });
-    };
+    }
 
-}).call(CommandManager.prototype);
+}
+oop.implement(CommandManager.prototype, EventEmitter);
 
 exports.CommandManager = CommandManager;

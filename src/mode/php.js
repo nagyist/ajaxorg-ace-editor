@@ -5,12 +5,13 @@ var TextMode = require("./text").Mode;
 var PhpHighlightRules = require("./php_highlight_rules").PhpHighlightRules;
 var PhpLangHighlightRules = require("./php_highlight_rules").PhpLangHighlightRules;
 var MatchingBraceOutdent = require("./matching_brace_outdent").MatchingBraceOutdent;
-var Range = require("../range").Range;
 var WorkerClient = require("../worker/worker_client").WorkerClient;
 var PhpCompletions = require("./php_completions").PhpCompletions;
-var CstyleBehaviour = require("./behaviour/cstyle").CstyleBehaviour;
-var CStyleFoldMode = require("./folding/cstyle").FoldMode;
+var PhpFoldMode = require("./folding/php").FoldMode;
 var unicode = require("../unicode");
+var MixedFoldMode = require("./folding/mixed").FoldMode;
+var HtmlFoldMode = require("./folding/html").FoldMode;
+var CstyleFoldMode = require("./folding/cstyle").FoldMode;
 var HtmlMode = require("./html").Mode;
 var JavaScriptMode = require("./javascript").Mode;
 var CssMode = require("./css").Mode;
@@ -18,9 +19,13 @@ var CssMode = require("./css").Mode;
 var PhpMode = function(opts) {
     this.HighlightRules = PhpLangHighlightRules;
     this.$outdent = new MatchingBraceOutdent();
-    this.$behaviour = new CstyleBehaviour();
+    this.$behaviour = this.$defaultBehaviour;
     this.$completer = new PhpCompletions();
-    this.foldingRules = new CStyleFoldMode();
+    this.foldingRules = new MixedFoldMode(new HtmlFoldMode(), {
+        "js-": new CstyleFoldMode(),
+        "css-": new CstyleFoldMode(),
+        "php-": new PhpFoldMode()
+    });
 };
 oop.inherits(PhpMode, TextMode);
 
@@ -93,7 +98,11 @@ var Mode = function(opts) {
         "css-": CssMode,
         "php-": PhpMode
     });
-    this.foldingRules.subModes["php-"] = new CStyleFoldMode();
+    this.foldingRules = new MixedFoldMode(new HtmlFoldMode(), {
+        "js-": new CstyleFoldMode(),
+        "css-": new CstyleFoldMode(),
+        "php-": new PhpFoldMode()
+    });
 };
 oop.inherits(Mode, HtmlMode);
 

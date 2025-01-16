@@ -1,76 +1,56 @@
 "use strict";
-
+/**
+ * @typedef {import("./edit_session").EditSession} EditSession
+ * @typedef {import("../ace-internal").Ace.SearchOptions} SearchOptions
+ */
 var lang = require("./lib/lang");
 var oop = require("./lib/oop");
 var Range = require("./range").Range;
 
 /**
- * @class Search
- *
  * A class designed to handle all sorts of text searches within a [[Document `Document`]].
- *
  **/
+class Search {
 
-/**
- * 
- *
- * Creates a new `Search` object. The following search options are available:
- *
- * - `needle`: The string or regular expression you're looking for
- * - `backwards`: Whether to search backwards from where cursor currently is. Defaults to `false`.
- * - `wrap`: Whether to wrap the search back to the beginning when it hits the end. Defaults to `false`.
- * - `caseSensitive`: Whether the search ought to be case-sensitive. Defaults to `false`.
- * - `wholeWord`: Whether the search matches only on whole words. Defaults to `false`.
- * - `range`: The [[Range]] to search within. Set this to `null` for the whole document
- * - `regExp`: Whether the search is a regular expression or not. Defaults to `false`.
- * - `start`: The starting [[Range]] or cursor position to begin the search
- * - `skipCurrent`: Whether or not to include the current line in the search. Default to `false`.
- * 
- * @constructor
- **/
+    constructor() {
+        /**@type {Partial<SearchOptions>}*/
+        this.$options = {};
+    }
 
-var Search = function() {
-    this.$options = {};
-};
-
-(function() {
     /**
      * Sets the search options via the `options` parameter.
-     * @param {Object} options An object containing all the new search properties
-     *
-     * 
+     * @param {Partial<SearchOptions>} options An object containing all the new search properties
      * @returns {Search}
      * @chainable
     **/
-    this.set = function(options) {
+    set(options) {
         oop.mixin(this.$options, options);
         return this;
-    };
+    }
 
     /**
      * [Returns an object containing all the search options.]{: #Search.getOptions}
-     * @returns {Object}
+     * @returns {Partial<SearchOptions>}
     **/
-    this.getOptions = function() {
+    getOptions() {
         return lang.copyObject(this.$options);
-    };
-    
+    }
+
     /**
      * Sets the search options via the `options` parameter.
-     * @param {Object} An object containing all the search propertie
+     * @param {Partial<SearchOptions>} options object containing all the search propertie
      * @related Search.set
     **/
-    this.setOptions = function(options) {
+    setOptions(options) {
         this.$options = options;
-    };
+    }
+
     /**
      * Searches for `options.needle`. If found, this method returns the [[Range `Range`]] where the text first occurs. If `options.backwards` is `true`, the search goes backwards in the session.
      * @param {EditSession} session The session to search with
-     *
-     * 
-     * @returns {Range}
-    **/
-    this.find = function(session) {
+     * @returns {Range | null | false}
+     **/
+    find(session) {
         var options = this.$options;
         var iterator = this.$matchIterator(session, options);
         if (!iterator)
@@ -79,27 +59,25 @@ var Search = function() {
         var firstRange = null;
         iterator.forEach(function(sr, sc, er, ec) {
             firstRange = new Range(sr, sc, er, ec);
-            if (sc == ec && options.start && options.start.start
-                && options.skipCurrent != false && firstRange.isEqual(options.start)
+            if (sc == ec && options.start && /**@type{Range}*/(options.start).start
+                && options.skipCurrent != false && firstRange.isEqual(/**@type{Range}*/(options.start))
             ) {
                 firstRange = null;
                 return false;
             }
-            
+
             return true;
         });
 
         return firstRange;
-    };
+    }
 
     /**
      * Searches for all occurrances `options.needle`. If found, this method returns an array of [[Range `Range`s]] where the text first occurs. If `options.backwards` is `true`, the search goes backwards in the session.
      * @param {EditSession} session The session to search with
-     *
-     * 
-     * @returns {[Range]}
+     * @returns {Range[]}
     **/
-    this.findAll = function(session) {
+    findAll(session) {
         var options = this.$options;
         if (!options.needle)
             return [];
@@ -120,12 +98,12 @@ var Search = function() {
                 for (var j = 0; j < len; j++)
                     if (lines[row + j].search(re[j]) == -1)
                         continue outer;
-                
+
                 var startLine = lines[row];
                 var line = lines[row + len - 1];
                 var startIndex = startLine.length - startLine.match(re[0])[0].length;
                 var endIndex = line.match(re[len - 1])[0].length;
-                
+
                 if (prevRange && prevRange.end.row === row &&
                     prevRange.end.column > startIndex
                 ) {
@@ -157,7 +135,7 @@ var Search = function() {
             var endRow = range.end.row - range.start.row;
             while (i < j && ranges[j].end.column > endColumn && ranges[j].end.row == endRow)
                 j--;
-            
+
             ranges = ranges.slice(i, j + 1);
             for (i = 0, j = ranges.length; i < j; i++) {
                 ranges[i].start.row += range.start.row;
@@ -166,19 +144,19 @@ var Search = function() {
         }
 
         return ranges;
-    };
+    }
 
     /**
      * Searches for `options.needle` in `input`, and, if found, replaces it with `replacement`.
      * @param {String} input The text to search in
-     * @param {String} replacement The replacing text
+     * @param {any} replacement The replacing text
      * + (String): If `options.regExp` is `true`, this function returns `input` with the replacement already made. Otherwise, this function just returns `replacement`.<br/>
      * If `options.needle` was not found, this function returns `null`.
      *
-     * 
+     *
      * @returns {String}
     **/
-    this.replace = function(input, replacement) {
+    replace(input, replacement) {
         var options = this.$options;
 
         var re = this.$assembleRegExp(options);
@@ -191,7 +169,10 @@ var Search = function() {
         var match = re.exec(input);
         if (!match || match[0].length != input.length)
             return null;
-        
+        if (!options.regExp) {
+            replacement = replacement.replace(/\$/g, "$$$$");
+        }
+
         replacement = input.replace(re, replacement);
         if (options.preserveCase) {
             replacement = replacement.split("");
@@ -204,11 +185,17 @@ var Search = function() {
             }
             replacement = replacement.join("");
         }
-        
-        return replacement;
-    };
 
-    this.$assembleRegExp = function(options, $disableFakeMultiline) {
+        return replacement;
+    }
+
+    /**
+     *
+     * @param {Partial<SearchOptions>} options
+     * @param {boolean} [$disableFakeMultiline]
+     * @return {RegExp|boolean|*[]|*}
+     */
+    $assembleRegExp(options, $disableFakeMultiline) {
         if (options.needle instanceof RegExp)
             return options.re = options.needle;
 
@@ -220,24 +207,37 @@ var Search = function() {
         if (!options.regExp)
             needle = lang.escapeRegExp(needle);
 
+        var modifier = options.caseSensitive ? "gm" : "gmi";
+
+        try {
+            new RegExp(needle, "u");
+            options.$supportsUnicodeFlag = true;
+            modifier += "u";
+        } catch (e) {
+            options.$supportsUnicodeFlag = false; //left for backward compatibility with previous versions for cases like /ab\{2}/gu
+        }
+
         if (options.wholeWord)
             needle = addWordBoundary(needle, options);
-
-        var modifier = options.caseSensitive ? "gm" : "gmi";
 
         options.$isMultiLine = !$disableFakeMultiline && /[\n\r]/.test(needle);
         if (options.$isMultiLine)
             return options.re = this.$assembleMultilineRegExp(needle, modifier);
 
         try {
+            /**@type {RegExp|false}*/
             var re = new RegExp(needle, modifier);
         } catch(e) {
             re = false;
         }
         return options.re = re;
-    };
+    }
 
-    this.$assembleMultilineRegExp = function(needle, modifier) {
+    /**
+     * @param {string} needle
+     * @param {string} modifier
+     */
+    $assembleMultilineRegExp(needle, modifier) {
         var parts = needle.replace(/\r\n|\r|\n/g, "$\n^").split("\n");
         var re = [];
         for (var i = 0; i < parts.length; i++) try {
@@ -246,26 +246,30 @@ var Search = function() {
             return false;
         }
         return re;
-    };
+    }
 
-    this.$matchIterator = function(session, options) {
+    /**
+     * @param {EditSession} session
+     */
+    $matchIterator(session, options) {
         var re = this.$assembleRegExp(options);
         if (!re)
             return false;
         var backwards = options.backwards == true;
         var skipCurrent = options.skipCurrent != false;
+        var supportsUnicodeFlag = re.unicode;
 
         var range = options.range;
         var start = options.start;
         if (!start)
             start = range ? range[backwards ? "end" : "start"] : session.selection.getRange();
-         
+
         if (start.start)
             start = start[skipCurrent != backwards ? "end" : "start"];
 
         var firstRow = range ? range.start.row : 0;
         var lastRow = range ? range.end.row : session.getLength() - 1;
-        
+
         if (backwards) {
             var forEach = function(callback) {
                 var row = start.row;
@@ -296,7 +300,7 @@ var Search = function() {
                         return;
             };
         }
-        
+
         if (options.$isMultiLine) {
             var len = re.length;
             var forEachInLine = function(row, offset, callback) {
@@ -327,7 +331,7 @@ var Search = function() {
                     last = m.index;
                     if (!length) {
                         if (last >= line.length) break;
-                        re.lastIndex = last += 1;
+                        re.lastIndex = last += lang.skipEmptyMatch(line, last, supportsUnicodeFlag);
                     }
                     if (m.index + length > endIndex)
                         break;
@@ -353,24 +357,44 @@ var Search = function() {
                     if (callback(row, last, row,last + length))
                         return true;
                     if (!length) {
-                        re.lastIndex = last += 1;
+                        re.lastIndex = last += lang.skipEmptyMatch(line, last, supportsUnicodeFlag);
                         if (last >= line.length) return false;
                     }
                 }
             };
         }
         return {forEach: forEach};
-    };
+    }
 
-}).call(Search.prototype);
+}
 
+/**
+ *
+ * @param {string} needle
+ * @param {Partial<SearchOptions>} options
+ * @return {string}
+ */
 function addWordBoundary(needle, options) {
-    function wordBoundary(c) {
-        if (/\w/.test(c) || options.regExp) return "\\b";
+    let supportsLookbehind = lang.supportsLookbehind();
+
+    function wordBoundary(c, firstChar = true) {
+        let wordRegExp = supportsLookbehind && options.$supportsUnicodeFlag ? new RegExp("[\\p{L}\\p{N}_]","u") : new RegExp("\\w");
+
+        if (wordRegExp.test(c) || options.regExp) {
+            if (supportsLookbehind && options.$supportsUnicodeFlag) {
+                if (firstChar) return "(?<=^|[^\\p{L}\\p{N}_])";
+                return "(?=[^\\p{L}\\p{N}_]|$)";
+            }
+            return "\\b";
+        }
         return "";
     }
-    return wordBoundary(needle[0]) + needle
-        + wordBoundary(needle[needle.length - 1]);
+
+    let needleArray = Array.from(needle);
+    let firstChar = needleArray[0];
+    let lastChar = needleArray[needleArray.length - 1];
+
+    return wordBoundary(firstChar) + needle + wordBoundary(lastChar, false);
 }
 
 exports.Search = Search;

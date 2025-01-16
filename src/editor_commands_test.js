@@ -11,6 +11,9 @@ var MockRenderer = require("./test/mockrenderer").MockRenderer;
 var JavaScriptMode = require("./mode/javascript").Mode;
 var HTMLMode = require("./mode/html").Mode;
 var assert = require("./test/assertions");
+
+require("./multi_select");
+
 var editor;
 
 var exec = function(name, times, args) {
@@ -31,15 +34,35 @@ module.exports = {
         setTimeout(function() {
             assert.equal(editor.$highlightPending, false);
             assert.ok(editor.session.$bracketHighlight);
+            assert.equal(
+                editor.session.$bracketHighlight.ranges + "",
+                "Range: [0/1] -> [0/5],Range: [0/26] -> [0/30]"
+            );
             exec("gotoend", 1);
             exec("gotoleft", 3);
             assert.equal(editor.$highlightPending, true);
             setTimeout(function() {
                 assert.equal(editor.$highlightPending, false);
-                done();
+
+                editor.setValue("{}");
+                exec("gotostart", 1);
+                setTimeout(function() {
+                    assert.equal(
+                        editor.session.$bracketHighlight.ranges + "",
+                        'Range: [0/0] -> [0/2]'
+                    );
+                    exec("gotoend", 1);
+                    setTimeout(function() {
+                        assert.equal(
+                            editor.session.$bracketHighlight.ranges + "",
+                            'Range: [0/0] -> [0/2]'
+                        );
+                        done();
+                    }, 51);
+                }, 51);
             }, 51);
         }, 51);
-    },    
+    },
     "test modifyNumber": function() {
         editor = new Editor(new MockRenderer());
         editor.setValue("999");
@@ -541,6 +564,16 @@ module.exports = {
 
         url = editor.findLinkAt(1, 5);
         assert.equal(url, "https://www.google.com/");
+    },
+    "test handle events without deprecated keyCode property": function() {
+        var e = new CustomEvent("keydown"); 
+        e.code = "KeyA"; 
+        e.ctrlKey = true;
+        editor = new Editor(new MockRenderer());
+        editor.session.setValue("123");
+        assert.equal(editor.getSelectedText(), "");
+        editor.textInput.getElement().dispatchEvent(e);
+        assert.equal(editor.getSelectedText(), "123");
     }
 };
 
