@@ -175,22 +175,23 @@ class Cursor {
     /**
      * @param {import("../../ace-internal").Ace.Point} [position]
      * @param {boolean} [onScreen]
+     * @return {{left: number, top: number, width: number}}
      */
     getPixelPosition(position, onScreen) {
         if (!this.config || !this.session)
-            return {left : 0, top : 0};
+            return {left : 0, top : 0, width: 0};
 
         if (!position)
             position = this.session.selection.getCursor();
         var pos = this.session.documentToScreenPosition(position);
-        var cursorLeft = this.$padding + (this.session.$bidiHandler.isBidiRow(pos.row, position.row)
-            ? this.session.$bidiHandler.getPosLeft(pos.column)
-            : pos.column * this.config.characterWidth);
+        var textWidth = this.config.fontMetrics.textWidth(pos.row, pos.column);
+        var cursorLeft = this.$padding + textWidth;
 
         var cursorTop = (pos.row - (onScreen ? this.config.firstRowScreen : 0)) *
             this.config.lineHeight;
+        var cursorWidth = this.config.fontMetrics.textWidth(pos.row, pos.column + 1) - textWidth;
 
-        return {left : cursorLeft, top : cursorTop};
+        return {left : cursorLeft, top : cursorTop, width : Math.abs(cursorWidth) || this.config.characterWidth };
     }
 
     isCursorInView(pixelPos, config) {
@@ -223,7 +224,7 @@ class Cursor {
                 } else {
                     dom.setStyle(style, "display", "block");
                     dom.translate(element, pixelPos.left, pixelPos.top);
-                    dom.setStyle(style, "width", Math.round(config.characterWidth) + "px");
+                    dom.setStyle(style, "width", Math.round(pixelPos.width) + "px");
                     dom.setStyle(style, "height", config.lineHeight + "px");
                 }
             } else {

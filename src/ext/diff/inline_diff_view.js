@@ -197,8 +197,8 @@ class InlineDiffView extends BaseDiffView {
             var screenPos = ev.editor.renderer.pixelToScreenCoordinates(ev.clientX, ev.clientY);
             var sessionA = this.activeEditor.session;
             var sessionB = this.otherEditor.session;
-            var posA = sessionA.screenToDocumentPosition(screenPos.row, screenPos.column, screenPos.offsetX); 
-            var posB = sessionB.screenToDocumentPosition(screenPos.row, screenPos.column, screenPos.offsetX); 
+            var posA = sessionA.screenToDocumentPosition(screenPos.row, screenPos.column);
+            var posB = sessionB.screenToDocumentPosition(screenPos.row, screenPos.column);
         
             var posAx = sessionA.documentToScreenPosition(posA); 
             var posBx = sessionB.documentToScreenPosition(posB); 
@@ -381,13 +381,6 @@ class InlineDiffView extends BaseDiffView {
         cloneRenderer.$computeLayerConfig();
 
         var newConfig = cloneRenderer.layerConfig;
-        
-        this.gutterLayer.update(newConfig);
-
-        newConfig.firstRowScreen = config.firstRowScreen;
-        
-        cloneRenderer.$cursorLayer.config = newConfig;
-        cloneRenderer.$cursorLayer.update(newConfig);
 
         if (changes & cloneRenderer.CHANGE_LINES
             || changes & cloneRenderer.CHANGE_FULL
@@ -395,6 +388,13 @@ class InlineDiffView extends BaseDiffView {
             || changes & cloneRenderer.CHANGE_TEXT
         )
             this.textLayer.update(newConfig);
+        
+        this.gutterLayer.update(newConfig);
+
+        newConfig.firstRowScreen = config.firstRowScreen;
+        
+        cloneRenderer.$cursorLayer.config = newConfig;
+        cloneRenderer.$cursorLayer.update(newConfig);
 
         this.markerLayer.setMarkers(this.otherSession.getMarkers());
         this.markerLayer.update(newConfig);

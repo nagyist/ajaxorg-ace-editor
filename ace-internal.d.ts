@@ -85,6 +85,16 @@ export namespace Ace {
         offset: number,
         height: number,
         gutterOffset: number
+        fontMetrics: {
+            textWidth: (row: number, column: number) => number,
+            getRects: (start: Position, end: Position) => Rect[]
+        }
+    }
+    interface Rect {
+        left: number,
+        top: number,
+        width: number,
+        height: number,
     }
 
     interface HardWrapOptions {
@@ -1449,6 +1459,7 @@ declare module "./src/edit_session" {
         _changedWidgets?: any,
         $options: any,
         $wrapMethod?: any,
+        $fontMetrics?: FontMetrics|null,
         $enableVarChar?: any,
         $wrap?: any,
         $navigateWithinSoftTabs?: boolean,
